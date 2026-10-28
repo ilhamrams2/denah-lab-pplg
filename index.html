@@ -1,0 +1,684 @@
+<!doctype html>
+<html lang="id">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Denah Tempat Duduk — LAB PPLG (Sistem Fleksibel & Dinamis)</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css?v=4.0">
+  <!-- SheetJS for Excel Import/Export -->
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+</head>
+<body data-theme="purple" data-orientation="portrait">
+
+  <!-- TOP HEADER & PRIMARY TOOLBAR -->
+  <header class="app-header">
+    <div class="brand">
+      <div class="brand-icon">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18"/><path d="M9 21V9"/></svg>
+      </div> 
+      <div>
+        <div class="brand-title">DENAH LAB PPLG <span class="badge-version">v2.0 PRO</span></div>
+        <p class="brand-sub">Sistem Denah Pintar & Tata Letak Kursi Fleksibel</p>
+      </div>
+    </div>
+
+    <!-- MODE SWITCH TABS -->
+    <div class="mode-tabs">
+      <button id="btnModeSeating" class="mode-tab active" onclick="switchMode('seating')">
+        <span class="icon">👤</span> Mode Atur Siswa
+      </button>
+      <button id="btnModeLayout" class="mode-tab" onclick="switchMode('layout')">
+        <span class="icon">🛠️</span> Mode Desain Layout
+      </button>
+    </div>
+
+    <!-- MAIN ACTIONS -->
+    <div class="header-actions">
+      <button class="btn btn-secondary" onclick="openSettingsModal()" title="Buka Pengaturan Denah, Ukuran Meja, Format NIS & Tema Keseluruhan">
+        <span>⚙️</span> Pengaturan
+      </button>
+      <button id="btnPrint" class="btn btn-accent" onclick="prepareAndPrint()" title="Cetak atau Simpan sebagai PDF">
+        <span>🖨️</span> Cetak / PDF
+      </button>
+    </div>
+  </header>
+
+  <!-- SUB-TOOLBAR: DYNAMIC BASED ON ACTIVE MODE -->
+  <section class="sub-toolbar">
+    <!-- Seating Mode Controls -->
+    <div id="seatingControls" class="sub-controls-group active-group">
+      <span class="group-label">⚡ Operasi Kursi:</span>
+      <button class="btn-sm" onclick="shuffleSeats()" title="Acak tempat duduk siswa secara otomatis">
+        <span>🔀</span> Acak Kursi
+      </button>
+      <button class="btn-sm" onclick="sortSeatsAlphabetical()" title="Urutkan posisi duduk berdasarkan nama A-Z">
+        <span>🔤</span> Urutkan A-Z
+      </button>
+      <button class="btn-sm" onclick="sortSeatsByNIS()" title="Urutkan posisi duduk berdasarkan NIS / ID">
+        <span>🆔</span> Urutkan NIS
+      </button>
+      <button class="btn-sm" onclick="resetSeatsToDefault()" title="Urutkan sesuai urutan awal data siswa">
+        <span>🔢</span> Sesuai Urutan Asli
+      </button>
+      <button class="btn-sm" onclick="autoFillEmptySeats()" title="Tempatkan siswa yang belum duduk ke kursi yang masih kosong">
+        <span>📥</span> Isi Otomatis
+      </button>
+      <button class="btn-sm btn-danger-soft" onclick="clearAllSeats()" title="Kosongkan seluruh kursi di ruangan">
+        <span>🧹</span> Kosongkan Denah
+      </button>
+      <div class="vr"></div>
+      <button class="btn-sm" onclick="undoLastAction()" id="btnUndo" disabled title="Batalkan perubahan terakhir">
+        <span>↩️</span> Undo
+      </button>
+    </div>
+
+    <!-- Layout Mode Controls -->
+    <div id="layoutControls" class="sub-controls-group">
+      <span class="group-label">📐 Preset Denah:</span>
+      <select id="presetSelect" onchange="applyPresetLayout(this.value)">
+        <option value="pplg_default">1. LAB PPLG — Standar Software Lab (40 Kursi)</option>
+        <option value="bcf_studio">2. LAB BCF — Studio & Post-Production Suites (40 Kursi)</option>
+        <option value="tjkt_network">3. LAB TJKT — Perimeter Network Benches & Server Island (40 Kursi)</option>
+        <option value="grid_5x8">4. Barisan Klasik 5 Kolom x 8 Baris (40 Kursi)</option>
+        <option value="grid_4x10">5. Barisan 4 Kolom x 10 Baris (40 Kursi)</option>
+        <option value="u_shape">6. Model U-Shape / Keliling Lab (36 Kursi)</option>
+        <option value="pods">7. Model Kelompok / Pods 4 Meja (40 Kursi)</option>
+        <option value="twin_islands">8. Dua Pulau Tengah / Twin Island (36 Kursi)</option>
+      </select>
+
+      <div class="vr"></div>
+
+      <button class="btn-sm" onclick="addNewSeat()" title="Tambahkan 1 kursi baru ke ruangan">
+        <span>➕</span> Tambah Kursi
+      </button>
+      <button class="btn-sm" onclick="removeLastSeat()" title="Hapus kursi bernomor paling akhir">
+        <span>➖</span> Kurang Kursi
+      </button>
+
+      <div class="vr"></div>
+
+      <span class="group-label">Snap Grid:</span>
+      <select id="snapGridSelect" onchange="state.snapGrid = parseInt(this.value, 10)">
+        <option value="0">Bebas (Tanpa Grid)</option>
+        <option value="10" selected>10 px (Rapi)</option>
+        <option value="20">20 px (Kuat)</option>
+      </select>
+
+      <button class="btn-sm" onclick="renumberSeats()" title="Nomori ulang kursi secara teratur dari kiri atas">
+        <span>🔢</span> Rapikan Nomor Kursi
+      </button>
+
+      <button class="btn-sm btn-warning-soft" onclick="resetToDefaultLayout()" title="Kembalikan tata letak ke bawaan Lab PPLG">
+        <span>🔄</span> Reset Posisi Denah
+      </button>
+    </div>
+  </section>
+
+  <!-- BANNER NOTIFICATION (E.G. WHEN IN SWAP MODE) -->
+  <div id="interactiveBanner" class="interactive-banner" style="display:none;">
+    <div class="banner-content">
+      <span class="banner-icon">🔄</span>
+      <span id="bannerText">Pilih kursi tujuan untuk menukar posisi duduk...</span>
+      <button class="btn-xs btn-white" onclick="cancelSwapMode()">Batal</button>
+    </div>
+  </div>
+
+  <!-- MAIN APP WORKSPACE -->
+  <div class="layout">
+    <!-- LEFT SIDEBAR: MANAJER DENAH LAB & UPLOAD SISWA CSV -->
+    <aside class="sidebar">
+      <div class="sidebar-header">
+        <div class="sidebar-title-row">
+          <h2>🏢 Denah Lab</h2>
+          <button class="btn-xs btn-primary" onclick="openCreateLabModal()" title="Tambah denah lab baru">
+            ➕ Tambah Lab
+          </button>
+        </div>
+        <p class="sidebar-desc">Kelola nama lab & upload data siswa CSV terpisah per denah.</p>
+        
+        <!-- BACKUP & RESTORE DATA JSON LOKAL -->
+        <div class="sidebar-backup-row">
+          <button class="btn-sidebar-backup" onclick="exportAllDataJSON()" title="Simpan / Download seluruh denah lab dan data siswa ke file JSON lokal">
+            <span>💾</span> Simpan Cadangan (JSON)
+          </button>
+          <button class="btn-sidebar-backup" onclick="triggerImportAllDataJSON()" title="Pulihkan denah lab dari file JSON lokal yang pernah dicadangkan">
+            <span>📂</span> Buka Cadangan
+          </button>
+          <input type="file" id="backupRestoreFileInput" accept=".json" style="display:none;" onchange="importAllDataJSON(event)">
+        </div>
+      </div>
+
+      <!-- ACTIVE LAB CARD & QUICK ACTIONS -->
+      <div class="sidebar-active-lab-box">
+        <div class="active-lab-header">
+          <span class="active-lab-tag">Denah Aktif:</span>
+          <div class="active-lab-quick-actions">
+            <button class="btn-xs-ghost" onclick="openRenameLabModal()" title="Ubah nama lab aktif">✏️ Ganti Nama</button>
+            <button class="btn-xs-ghost" onclick="openDuplicateLabModal()" title="Duplikat denah ini (copas susunan bangku & format)">📋 Duplikat</button>
+          </div>
+        </div>
+        <div class="active-lab-title-row">
+          <div class="active-lab-name-display" id="sidebarActiveLabName">LAB PPLG</div>
+          <button class="btn-xs btn-outline" onclick="switchMode('layout')" title="Pindah ke Mode Desain Layout untuk menggeser posisi bangku">
+            🛠️ Atur Posisi Kursi
+          </button>
+        </div>
+
+        <!-- PILIHAN TEMA WARNA BINGKAI DENAH -->
+        <div class="lab-theme-selector-wrap">
+          <span class="lab-theme-label">🎨 Warna Denah:</span>
+          <div class="theme-swatches-inline">
+            <button class="swatch-btn theme-purple" onclick="setLabTheme('purple')" title="Ungu Lab PPLG"></button>
+            <button class="swatch-btn theme-orange" onclick="setLabTheme('orange')" title="Oranye Lab BCF"></button>
+            <button class="swatch-btn theme-blue" onclick="setLabTheme('blue')" title="Biru Modern / TJKT"></button>
+            <button class="swatch-btn theme-emerald" onclick="setLabTheme('emerald')" title="Hijau Zamrud"></button>
+            <button class="swatch-btn theme-slate" onclick="setLabTheme('slate')" title="Abu Gelap / Slate"></button>
+            <button class="swatch-btn theme-mono" onclick="setLabTheme('mono')" title="Hitam Putih Hemat Tinta"></button>
+          </div>
+        </div>
+
+        <!-- UPLOAD CSV UNTUK DENAH INI -->
+        <div class="lab-csv-action-card">
+          <div class="lab-csv-header">
+            <span>📄 Data Siswa (CSV Denah Ini)</span>
+            <span class="badge-count" id="sidebarStudentCount">0 Siswa</span>
+          </div>
+          
+          <div class="lab-csv-btn-row">
+            <label class="btn-upload-lab-csv" title="Upload file CSV siswa khusus untuk denah lab ini">
+              <span>📥</span> Upload CSV
+              <input type="file" id="labCsvFileInput" accept=".csv" style="display:none;" onchange="handleSingleLabCsvUpload(event)">
+            </label>
+            <button class="btn-download-tpl-csv" onclick="downloadStudentTemplateCsv()" title="Unduh format template CSV siswa">
+              <span>📄</span> Template
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- DAFTAR SEMUA DENAH LAB -->
+      <div class="sidebar-labs-section">
+        <div class="sidebar-section-title">
+          <span>DAFTAR SEMUA LAB</span>
+          <span id="sidebarTotalLabsCount" class="count-pill">1</span>
+        </div>
+        <div id="labCardsList" class="lab-cards-list"></div>
+      </div>
+
+      <!-- DAFTAR SISWA DENAH AKTIF (MINIMALIS) -->
+      <div class="sidebar-students-section">
+        <div class="sidebar-section-title">
+          <span>SISWA DI DENAH INI</span>
+          <button class="btn-xs-text" onclick="openAddStudentModal()">+ Tambah</button>
+        </div>
+        <div id="studentListMini" class="student-list-mini"></div>
+      </div>
+    </aside>
+
+    <!-- RIGHT MAIN: DENAH CANVAS & CONTROLS -->
+    <main class="canvas-viewport">
+      <div class="canvas-controls-bar">
+        <div class="canvas-mode-indicator" id="modeIndicatorBadge">
+          <span class="pulse-dot"></span>
+          <span id="modeIndicatorText">Mode Penataan Siswa Aktif</span>
+        </div>
+
+        <div class="canvas-zoom-tools">
+          <button class="btn-zoom" onclick="zoomCanvas(-0.1)" title="Perkecil Tampilan">➖</button>
+          <span id="zoomPercent" class="zoom-text">100%</span>
+          <button class="btn-zoom" onclick="zoomCanvas(0.1)" title="Perbesar Tampilan">➕</button>
+          <button class="btn-zoom" onclick="resetZoom()" title="Reset Ukuran Normal">1:1</button>
+          <button class="btn-zoom" onclick="fitCanvas()" title="Pas Layar">Fit</button>
+          <button class="btn-zoom" onclick="prepareAndPrint()" title="Cetak / Simpan PDF" style="background:#059669;color:#fff;font-weight:700;margin-left:4px;">🖨️ Cetak</button>
+        </div>
+      </div>
+
+      <!-- THE PRINTABLE & INTERACTIVE PAPER -->
+      <div class="page-container" id="pageContainer">
+        <section id="page" class="page">
+          <div class="paper">
+            <!-- PAPER HEADER / KOP DENAH (KLIK LANGSUNG UNTUK UBAH SETIAP DENAH 1 PER 1) -->
+            <div class="paper-header" id="paperHeaderBox" onclick="handlePaperHeaderClick(event)" title="Klik bagian mana saja di kop header ini untuk merubah teks & informasi denah ini">
+              <div class="header-edit-badge">✏️ Edit Kop Header</div>
+              <input type="file" id="headerLogoFileInput" accept="image/*" style="display:none" onchange="handleHeaderLogoUpload(event)">
+              <div class="logo-box" id="logoContainer" onclick="triggerHeaderLogoUpload()" title="Klik untuk ganti logo gambar instansi / sekolah">
+                <img id="headerLogoImg" src="" alt="Logo Sekolah" style="display:none;">
+                <span id="logoText">LAB</span>
+                <div class="logo-hover-badge">📷 Ganti Logo</div>
+              </div>
+              <div class="title-box">
+                <div class="institution-name" id="institutionTitle" title="Klik untuk ubah Nama Sekolah / Lembaga">SMK PPLG INDONESIA</div>
+                <div class="exam-title" id="examTitle" title="Klik untuk ubah Judul Ujian / Kegiatan">Denah Tempat Duduk — Tes Kemampuan Akademik</div>
+                <div class="meta-row">
+                  <span id="dateDisplay" title="Klik untuk ubah Tanggal Ujian">Tanggal: <b id="examDate">Okt 2026</b></span>
+                  <span class="sep">•</span>
+                  <span id="proctorMeta" title="Klik untuk ubah Nama Proktor / Pengawas">Proktor: <b id="proctorNameDisplay">Proktor Lab</b></span>
+                </div>
+              </div>
+              <div class="lab-title-box">
+                <strong id="labTitle" title="Klik untuk ubah Nama Lab">LAB PPLG</strong>
+                <span class="session-badge" id="sessionTitle" title="Klik untuk ubah Sesi Ujian">Sesi 1</span>
+              </div>
+            </div>
+
+            <!-- DENAH ROOM CANVAS -->
+            <div id="roomCanvas" class="room">
+              <!-- ROOM ELEMENTS (BISA DI-KLIK UNTUK EDIT TEKS & DIGESER PADA MODE LAYOUT) -->
+              <div id="elemEntrance" class="room-element entrance" data-id="entrance" onclick="openEditRoomElementModal('entrance')" title="Klik untuk edit teks pintu / geser di Mode Layout">
+                <div class="elem-handle">⋮⋮</div>
+                <div class="elem-label">PINTU<br>MASUK</div>
+              </div>
+
+              <div id="elemProctor" class="room-element proctor" data-id="proctor" onclick="openEditRoomElementModal('proctor')" title="Klik untuk ganti nama meja proktor / geser di Mode Layout">
+                <div class="elem-handle">⋮⋮</div>
+                <div class="elem-label">MEJA PROKTOR</div>
+              </div>
+
+              <div id="elemSupervisor" class="room-element supervisor" data-id="supervisor" onclick="openEditRoomElementModal('supervisor')" title="Klik untuk ganti nama meja pengawas / geser di Mode Layout">
+                <div class="elem-handle">⋮⋮</div>
+                <div class="elem-label">MEJA PENGAWAS</div>
+              </div>
+
+              <div id="elemWhiteboard" class="room-element whiteboard" data-id="whiteboard" onclick="openEditRoomElementModal('whiteboard')" title="Klik untuk ganti teks layar / proyektor / whiteboard">
+                <div class="elem-handle">⋮⋮</div>
+                <div class="elem-label">LAYAR PROYEKTOR / PAPAN TULIS</div>
+              </div>
+
+              <!-- SEATS CONTAINER -->
+              <div id="seatsContainer" class="seats-container"></div>
+
+              <!-- ROOM LEGEND -->
+              <div class="legend">
+                <span><i class="dot dot-filled"></i> Terisi</span>
+                <span><i class="dot dot-empty"></i> Kosong</span>
+                <span><i class="dot dot-disabled"></i> Rusak / Cadangan</span>
+              </div>
+            </div>
+          </div>
+        </section>
+      </div>
+    </main>
+  </div>
+
+  <!-- MODAL: DETAIL & AKSI KURSI -->
+  <div id="seatModal" class="modal-overlay" style="display:none;" onclick="handleModalBackdropClick(event, 'seatModal')">
+    <div class="modal-card">
+      <div class="modal-header">
+        <div class="modal-title-wrap">
+          <span class="seat-badge-pill" id="modalSeatNumber">Kursi #1</span>
+          <h3 id="modalSeatTitle">Detail Tempat Duduk</h3>
+        </div>
+        <button class="modal-close" onclick="closeModal('seatModal')">&times;</button>
+      </div>
+
+      <div class="modal-body">
+        <!-- SISWA INFO BOX -->
+        <div id="modalOccupantWrap" class="occupant-wrap">
+          <div class="occupant-avatar-box">
+            <div id="modalPhotoPreview" class="occupant-avatar">👤</div>
+            <label class="btn-avatar-upload" title="Ganti foto siswa ini">
+              📷 Foto
+              <input type="file" id="modalPhotoInput" accept="image/*" style="display:none" onchange="uploadStudentPhoto(event)">
+            </label>
+          </div>
+          <div class="occupant-details">
+            <h4 id="modalStudentName">Nama Siswa</h4>
+            <div class="occupant-meta">
+              <span>NIS/ID: <b id="modalStudentId">-</b></span>
+              <span>Kode: <b id="modalStudentCode">-</b></span>
+              <span>Lab: <b id="modalStudentLab">-</b></span>
+            </div>
+          </div>
+        </div>
+
+        <!-- JIKA KURSI KOSONG -->
+        <div id="modalEmptyNotice" class="empty-notice" style="display:none;">
+          <span class="icon-big">🪑</span>
+          <p>Kursi ini saat ini <b>KOSONG</b></p>
+        </div>
+
+        <!-- FORM PILIH / GANTI SISWA CEPAT -->
+        <div class="form-group mt-3">
+          <label for="modalStudentSelect" class="form-label">Pilih / Ganti Siswa di Kursi Ini:</label>
+          <div class="select-search-row">
+            <select id="modalStudentSelect" class="form-select">
+              <option value="">-- Pilih Siswa --</option>
+            </select>
+            <button class="btn btn-primary btn-sm" onclick="assignSelectedStudentToModalSeat()">Pasang</button>
+          </div>
+        </div>
+
+        <!-- ACTION BUTTONS -->
+        <div class="modal-actions-grid mt-4">
+          <button class="btn btn-secondary" onclick="startSwapFromModal()">
+            <span>🔄</span> Tukar Posisi Kursi
+          </button>
+          <button class="btn btn-secondary" onclick="toggleSeatDisabledFromModal()" id="btnToggleDisabled">
+            <span id="iconToggleDisabled">🚫</span> <span id="textToggleDisabled">Tandai Rusak / Off</span>
+          </button>
+          <button class="btn btn-danger-soft" onclick="clearSeatFromModal()" id="btnClearModalSeat">
+            <span>❌</span> Kosongkan Kursi
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: PENGATURAN DENAH & TEMA -->
+  <div id="settingsModal" class="modal-overlay" style="display:none;" onclick="handleModalBackdropClick(event, 'settingsModal')">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h3>Pengaturan Informasi Denah & Tampilan</h3>
+        <button class="modal-close" onclick="closeModal('settingsModal')">&times;</button>
+      </div>
+
+      <div class="modal-body">
+        <div class="form-grid">
+          <div class="form-group">
+            <label class="form-label">Nama Sekolah / Lembaga:</label>
+            <input type="text" id="settingInstitution" class="form-control" value="SMK PPLG INDONESIA">
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Judul Kegiatan / Ujian:</label>
+            <input type="text" id="settingExam" class="form-control" value="Denah Tempat Duduk — Tes Kemampuan Akademik">
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Nama Ruangan / Lab:</label>
+            <input type="text" id="settingLabName" class="form-control" value="LAB PPLG">
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Sesi Ujian:</label>
+            <input type="text" id="settingSession" class="form-control" value="Sesi 1">
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Tanggal Ujian:</label>
+            <input type="text" id="settingDate" class="form-control" value="Okt 2026">
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Nama Proktor / Pengawas:</label>
+            <input type="text" id="settingProctor" class="form-control" value="Proktor Lab">
+          </div>
+        </div>
+
+        <hr class="modal-hr">
+
+        <h4 class="settings-sub">Pilihan Desain & Tampilan Kursi</h4>
+        <div class="form-grid">
+          <div class="form-group">
+            <label class="form-label">Orientasi Halaman Cetak:</label>
+            <select id="settingOrientation" class="form-select" onchange="changeOrientation(this.value)">
+              <option value="portrait">A4 Portrait (Tegak - Bawaan)</option>
+              <option value="landscape">A4 Landscape (Mendatar / Melebar)</option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Tema Warna Bingkai Denah:</label>
+            <div class="theme-picker-row">
+              <button class="theme-swatch theme-purple" onclick="setTheme('purple')" title="Ungu Lab PPLG"></button>
+              <button class="theme-swatch theme-orange" onclick="setTheme('orange')" title="Oranye Lab BCF (Sesuai Permintaan)"></button>
+              <button class="theme-swatch theme-blue" onclick="setTheme('blue')" title="Biru Modern / Lab TJKT"></button>
+              <button class="theme-swatch theme-emerald" onclick="setTheme('emerald')" title="Hijau Zamrud"></button>
+              <button class="theme-swatch theme-slate" onclick="setTheme('slate')" title="Abu Gelap / Slate"></button>
+              <button class="theme-swatch theme-mono" onclick="setTheme('mono')" title="Hitam Putih Hemat Tinta"></button>
+            </div>
+          </div>
+
+          <div class="form-group" style="grid-column: 1 / -1;">
+            <label class="form-label">Logo Kop Denah (Header):</label>
+            <div class="logo-setting-row">
+              <div class="logo-preview-box" id="settingsLogoPreview">
+                <img id="settingsLogoImg" src="" alt="Preview Logo" style="display:none;">
+                <span id="settingsLogoText">LAB</span>
+              </div>
+              <div class="logo-setting-actions">
+                <div class="logo-btn-row">
+                  <button type="button" class="btn btn-sm btn-primary" onclick="triggerHeaderLogoUpload()">
+                    📁 Pilih Gambar Logo (PNG / JPG)
+                  </button>
+                  <button type="button" class="btn btn-sm btn-secondary" onclick="resetHeaderLogo()">
+                    🔄 Kembalikan ke Teks
+                  </button>
+                </div>
+                <div class="form-hint">Klik tombol di atas atau klik langsung kotak logo di denah untuk mengganti gambar logo sekolah. Format: PNG transparan, JPG, SVG.</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Nomor yang Ditampilkan di Meja Siswa:</label>
+            <select id="settingIdFormat" class="form-select" onchange="updateIdDisplayFormat(this.value)">
+              <option value="nis_full">NIS / ID Siswa Lengkap</option>
+              <option value="nis_short">NIS Ringkas (5 Angka Terakhir)</option>
+              <option value="code">Kode Peserta (jika ada)</option>
+              <option value="no_only">Nomor Kursi Saja</option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Ukuran Meja / Kursi:</label>
+            <select id="settingSeatSize" class="form-select" onchange="updateSeatSize(this.value)">
+              <option value="large" selected>Besar & Jelas (Rekomendasi - 76x72px)</option>
+              <option value="xlarge">Ekstra Besar (82x78px)</option>
+              <option value="medium">Sedang (68x64px)</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="modal-footer mt-4">
+          <button class="btn btn-secondary" onclick="closeModal('settingsModal')">Tutup</button>
+          <button class="btn btn-primary" onclick="saveSettings()">Simpan Pengaturan</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: TAMBAH SISWA MANUAL -->
+  <div id="addStudentModal" class="modal-overlay" style="display:none;" onclick="handleModalBackdropClick(event, 'addStudentModal')">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h3>Tambah Siswa Manual</h3>
+        <button class="modal-close" onclick="closeModal('addStudentModal')">&times;</button>
+      </div>
+      <div class="modal-body">
+        <form onsubmit="handleAddStudentSubmit(event)">
+          <div class="form-group">
+            <label class="form-label">Nama Lengkap Siswa: *</label>
+            <input type="text" id="addName" class="form-control" required placeholder="Contoh: Budi Santoso">
+          </div>
+          <div class="form-group">
+            <label class="form-label">NIS / ID Siswa: *</label>
+            <input type="text" id="addId" class="form-control" required placeholder="Contoh: K0105026800999">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Kode Peserta:</label>
+            <input type="text" id="addCode" class="form-control" placeholder="Contoh: K0105-AC6K">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Pilihan Lab:</label>
+            <input type="text" id="addLab" class="form-control" placeholder="Contoh: LAB PPLG-1">
+          </div>
+          <div class="modal-footer mt-4">
+            <button type="button" class="btn btn-secondary" onclick="closeModal('addStudentModal')">Batal</button>
+            <button type="submit" class="btn btn-primary">Tambah ke Daftar</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: TAMBAH DENAH LAB BARU -->
+  <div id="createLabModal" class="modal-overlay" style="display:none;" onclick="handleModalBackdropClick(event, 'createLabModal')">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h3>➕ Tambah Denah Lab Baru</h3>
+        <button class="modal-close" onclick="closeModal('createLabModal')">&times;</button>
+      </div>
+      <div class="modal-body">
+        <form onsubmit="handleCreateLabSubmit(event)">
+          <div class="form-group">
+            <label class="form-label">Nama Lab / Ruangan: *</label>
+            <input type="text" id="newLabNameInput" class="form-control" required placeholder="Contoh: LAB PPLG 2, LAB RPL, dsb.">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Sesi Ujian:</label>
+            <input type="text" id="newLabSessionInput" class="form-control" value="Sesi 1" placeholder="Contoh: Sesi 1">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Model Layout Kursi Awal:</label>
+            <select id="newLabPresetSelect" class="form-select">
+              <option value="pplg_default">LAB PPLG Standar (40 Meja)</option>
+              <option value="grid_5x8">Barisan Klasik 5x8 (40 Meja)</option>
+              <option value="grid_4x10">Barisan 4x10 (40 Meja)</option>
+              <option value="u_shape">Model Keliling U-Shape (36 Meja)</option>
+              <option value="pods">Model Kelompok Pods (40 Meja)</option>
+              <option value="twin_islands">Dua Pulau Tengah (36 Meja)</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Warna Bingkai Denah:</label>
+            <select id="newLabThemeSelect" class="form-select">
+              <option value="purple">Ungu Lab PPLG</option>
+              <option value="orange">Oranye Lab BCF</option>
+              <option value="blue">Biru Modern / TJKT</option>
+              <option value="emerald">Hijau Zamrud</option>
+              <option value="slate">Abu Gelap / Slate</option>
+              <option value="mono">Hitam Putih Hemat Tinta</option>
+            </select>
+          </div>
+          <div class="modal-footer mt-4">
+            <button type="button" class="btn btn-secondary" onclick="closeModal('createLabModal')">Batal</button>
+            <button type="submit" class="btn btn-primary">Buat Denah Lab</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: UBAH NAMA LAB AKTIF -->
+  <div id="renameLabModal" class="modal-overlay" style="display:none;" onclick="handleModalBackdropClick(event, 'renameLabModal')">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h3>✏️ Ubah Nama Lab Aktif</h3>
+        <button class="modal-close" onclick="closeModal('renameLabModal')">&times;</button>
+      </div>
+      <div class="modal-body">
+        <form onsubmit="handleRenameLabSubmit(event)">
+          <div class="form-group">
+            <label class="form-label">Nama Lab / Ruangan:</label>
+            <input type="text" id="renameLabNameInput" class="form-control" required>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Sesi Ujian:</label>
+            <input type="text" id="renameLabSessionInput" class="form-control" required>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Warna Bingkai Denah:</label>
+            <select id="renameLabThemeSelect" class="form-select">
+              <option value="purple">Ungu Lab PPLG</option>
+              <option value="orange">Oranye Lab BCF</option>
+              <option value="blue">Biru Modern / TJKT</option>
+              <option value="emerald">Hijau Zamrud</option>
+              <option value="slate">Abu Gelap / Slate</option>
+              <option value="mono">Hitam Putih Hemat Tinta</option>
+            </select>
+          </div>
+          <div class="modal-footer mt-4">
+            <button type="button" class="btn btn-secondary" onclick="closeModal('renameLabModal')">Batal</button>
+            <button type="submit" class="btn btn-primary">Simpan</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: DUPLIKAT / COPAS DENAH LAB -->
+  <div id="duplicateLabModal" class="modal-overlay" style="display:none;" onclick="handleModalBackdropClick(event, 'duplicateLabModal')">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h3>📋 Duplikat Denah Lab (Copas Susunan Bangku)</h3>
+        <button class="modal-close" onclick="closeModal('duplicateLabModal')">&times;</button>
+      </div>
+      <div class="modal-body">
+        <p class="form-hint" style="margin-bottom:12px;">Seluruh posisi bangku, letak layar proyektor, meja proktor, dan setting layout dari denah aktif akan di-copas persis ke denah baru ini. Anda tinggal isi nama lab dan nama sesinya.</p>
+        <form onsubmit="handleDuplicateLabSubmit(event)">
+          <div class="form-group">
+            <label class="form-label">Nama Lab Hasil Duplikat: *</label>
+            <input type="text" id="dupLabNameInput" class="form-control" required placeholder="Contoh: LAB BCF, LAB PPLG 2, dsb.">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Sesi Ujian Baru: *</label>
+            <input type="text" id="dupLabSessionInput" class="form-control" required placeholder="Contoh: Sesi 2">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Data Siswa:</label>
+            <select id="dupCopyStudentsSelect" class="form-select">
+              <option value="empty">Kosongkan Siswa (Siap Upload CSV Baru)</option>
+              <option value="keep">Ikut Salin Data Siswa yang Sudah Ada</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Warna Bingkai Denah:</label>
+            <select id="dupLabThemeSelect" class="form-select">
+              <option value="keep">Samakan dengan Denah Asal</option>
+              <option value="purple">Ungu Lab PPLG</option>
+              <option value="orange">Oranye Lab BCF</option>
+              <option value="blue">Biru Modern / TJKT</option>
+              <option value="emerald">Hijau Zamrud</option>
+              <option value="slate">Abu Gelap / Slate</option>
+              <option value="mono">Hitam Putih Hemat Tinta</option>
+            </select>
+          </div>
+          <div class="modal-footer mt-4">
+            <button type="button" class="btn btn-secondary" onclick="closeModal('duplicateLabModal')">Batal</button>
+            <button type="submit" class="btn btn-primary">Duplikat Denah Sekarang</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: EDIT TEKS ELEMEN RUANGAN (LAYAR, PROKTOR, PENGAWAS, PINTU) -->
+  <div id="editRoomElementModal" class="modal-overlay" style="display:none;" onclick="handleModalBackdropClick(event, 'editRoomElementModal')">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h3 id="editRoomElementTitle">✏️ Ubah Teks Elemen Ruangan</h3>
+        <button class="modal-close" onclick="closeModal('editRoomElementModal')">&times;</button>
+      </div>
+      <div class="modal-body">
+        <form onsubmit="handleSaveRoomElementText(event)">
+          <input type="hidden" id="editRoomElementId">
+          <div class="form-group">
+            <label class="form-label" id="editRoomElementLabel">Teks / Nama Label:</label>
+            <input type="text" id="editRoomElementInput" class="form-control" required placeholder="Masukkan nama label...">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Preset Pilihan Cepat:</label>
+            <div id="roomElementPresetsRow" class="theme-picker-row" style="flex-wrap:wrap;gap:6px;"></div>
+          </div>
+          <div class="modal-footer mt-4">
+            <button type="button" class="btn btn-secondary" onclick="closeModal('editRoomElementModal')">Batal</button>
+            <button type="submit" class="btn btn-primary">Simpan Teks</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- FLOATING TOAST FEEDBACK -->
+  <div id="toastNotification" class="toast" style="display:none;">
+    <span id="toastIcon">✅</span>
+    <span id="toastMessage">Perubahan berhasil disimpan!</span>
+  </div>
+
+  <script src="app.js?v=5.0"></script>
+</body>
+</html>
